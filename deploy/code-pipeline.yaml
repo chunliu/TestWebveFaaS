@@ -1,0 +1,71 @@
+# Full build and release pipeline. The target function must already exist.
+# Replace the REPLACE_WITH_* values before importing into Code Pipeline.
+version: 2.0.0
+agentPool: public/prod-v2-public
+sources:
+  - name: testweb-vefaas
+    type: Github
+    url: https://github.com/chunliu/TestWebveFaaS.git
+    branch: main
+    credential:
+      type: serviceConnection
+      serviceConnectionId: REPLACE_WITH_GITHUB_SERVICE_CONNECTION_ID
+stages:
+  - stage: build
+    displayName: Test, build and push the container image
+    tasks:
+      - task: image
+        displayName: Build Linux amd64 image
+        steps:
+          - step: build-image
+            displayName: Build and push to Johor CR
+            component: buildkit-cr@5.0.0
+            inputs:
+              region: ap-southeast-1
+              registryInstance: REPLACE_WITH_CR_INSTANCE_ID
+              namespace: demo
+              repo: testweb-vefaas
+              tag: "$(DATETIME)"
+              contextPath: .
+              dockerfiles:
+                default:
+                  path: ./Dockerfile
+              buildParams: "--platform=linux/amd64"
+              useCache: true
+              cacheType: default
+              cacheUrl: .
+              compression: gzip
+              disableSSLVerify: false
+              nydusify: false
+        workspace: {}
+        dependsOn: []
+        resourcesPolicy: all
+        timeout: 30m
+        resources:
+          limits:
+            cpu: 1C
+            memory: 2Gi
+        outputs:
+          - imageOutput_build-image
+  - stage: deploy
+    displayName: Release to veFaaS
+    tasks:
+      - task: publish
+        displayName: Full release of the current image
+        component: faas-deploy@1.0.0
+        inputs:
+          region: ap-southeast-1
+          functionId: REPLACE_WITH_VEFAAS_FUNCTION_ID
+          functionVersion: "0"
+          deployPolicy:
+            type: full
+          artifact:
+            mode: output
+            type: image
+            value: "$(stages.build.tasks.image.outputs.imageOutput_build-image)"
+        workspace: {}
+        dependsOn: []
+        outputs:
+          - releaseId
+          - releaseStatus
+          - details

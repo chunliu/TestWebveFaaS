@@ -1,6 +1,6 @@
-FROM node:20-alpine
+FROM node:20-alpine AS build
 
-WORKDIR /app
+WORKDIR /opt/application
 
 ENV NODE_ENV=production
 
@@ -9,9 +9,24 @@ RUN npm ci --omit=dev
 
 COPY server.js ./
 COPY public ./public
+COPY scripts ./scripts
+COPY test ./test
+COPY run.sh ./
+RUN chmod 755 run.sh && npm test
 
-EXPOSE 3000
+FROM node:20-alpine AS runtime
+
+WORKDIR /opt/application
+ENV NODE_ENV=production
+ENV PORT=8000
+
+COPY --from=build /opt/application/node_modules ./node_modules
+COPY package*.json ./
+COPY server.js ./
+COPY public ./public
+COPY --chmod=755 run.sh ./
+
+EXPOSE 8000
 
 USER node
-
-CMD ["npm", "start"]
+CMD ["/opt/application/run.sh"]
